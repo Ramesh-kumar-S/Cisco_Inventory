@@ -1,3 +1,5 @@
+# from __future__ import print_function
+# from __future__ import unicode_literals
 from json.decoder import JSONDecodeError
 import requests
 from requests.api import get
@@ -13,7 +15,7 @@ import urllib3
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 import Requester
 import textwrap
-from __future__ import print_function
+
 D={}
 
 parser = argparse.ArgumentParser(
@@ -40,11 +42,10 @@ def FETCHER(IPaddr,Uname,Passwd):
     """
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-    # global IP
-    IP_Addr=IPaddr   #input("\nEnter the Setup IP : ")
+    IP_Addr=IPaddr  
     IP=IP_Addr.strip().split('/')[-1] 
-    USERNAME=Uname #input("\nEnter the Username :") #"ucspe"#input("Enter the Username :") 
-    PASSWORD=Passwd #getpass.getpass(prompt='\nEnter your Password : ', stream=None) #"ucspe"#getpass.getpass(prompt='Enter your Password : ', stream=None)
+    USERNAME=Uname 
+    PASSWORD=Passwd 
     """
     XML_ALTERNATOR Function takes XML_CODE as an Argument and Makes Request to the Specified IP Using POST Requests Library and Return XML_Response Code
     """
@@ -57,35 +58,38 @@ def FETCHER(IPaddr,Uname,Passwd):
         ELEMENT = DOM.getElementsByTagName('configResolveClasses')
         ELEMENT[0].setAttribute('cookie', COOKIE)
         CONFIG_QUERY_WITH_NEW_COOKIE=DOM.toprettyxml(indent='    ')
+        t=ET.fromstring(CONFIG_QUERY_WITH_NEW_COOKIE)
+        XML_ALTERNATOR.New_cookie=t.attrib['cookie']
         return CONFIG_QUERY_WITH_NEW_COOKIE
+
     """
     FI_FETCHER Function takes Response Returned from XML_ALTERNATOR Function Which Mainly Replaces the New Response Cookie Returned from UCS Login Request
     """
-    def FI_FETCHER(Response):
-        Login_Response = Response
-        XML_Element_Tree = ET.fromstring(Login_Response)
-        COOKIE=XML_Element_Tree.attrib['outCookie']
-        configResolveClass_FI_Query='<configResolveClasses cookie="1619182011/9a5812e8-3bf5-4565-b027-b450668a12e6" inHierarchical="true"> <inIds> <Id value="computeItem"/> <Id value="networkElement" /> </inIds> </configResolveClasses>'
-        DOM1 = minidom.parseString(configResolveClass_FI_Query)
-        ELEMENT1 = DOM1.getElementsByTagName('configResolveClasses')
-        ELEMENT1[0].setAttribute('cookie', COOKIE)
-        FI_CONFIG_QUERY_WITH_NEW_COOKIE=DOM1.toprettyxml(indent='    ')
+    def FI_FETCHER(Cookie):
+        FI_CONFIG_QUERY_WITH_NEW_COOKIE=('<configResolveClasses cookie="{}" inHierarchical="true"> <inIds> <Id value="computeItem"/> <Id value="networkElement" /> </inIds> </configResolveClasses>').format(Cookie)
         return FI_CONFIG_QUERY_WITH_NEW_COOKIE
 
-    """Login Request XML Code"""
+    # """Login Request XML Code"""
     try:
-        Login_Query=f'<aaaLogin inName= {USERNAME} inPassword= {PASSWORD} ></aaaLogin>'
+        Login_Query=('<aaaLogin inName= {} inPassword= {} ></aaaLogin>').format(USERNAME,PASSWORD)
         Login_Response = Requester.REQUESTER(Login_Query,IP)
         Config_Response=Requester.REQUESTER(XML_ALTERNATOR(Login_Response),IP)
-        Fi_Response=Requester.REQUESTER(FI_FETCHER(Login_Response),IP)
+        Fi_Response=Requester.REQUESTER(FI_FETCHER(XML_ALTERNATOR.New_cookie),IP)
         Server_ElementTree=ET.ElementTree(ET.fromstring(Config_Response))
         FI_ElementTree=ET.ElementTree(ET.fromstring(Fi_Response))
     except requests.exceptions.RequestException:
-        print(f'\n {IP} Unreachable')
+        print('\n {} Unreachable').format(IP)
         print("\n Incorrect IP/Credentials or Connection Error")
         print("\n Might be Setup Unreachable/Please Try Again!!")
         # quit()
         return None
+    
+    def Logout():
+        Logout_Query=("<aaaLogout inCookie={}/>").format(XML_ALTERNATOR.New_cookie)
+        Requester.REQUESTER(Logout_Query,IP)
+        # print("Logged Out")
+
+    Logout()
     SERVERS={}
     FI={}
     DUP=[]
@@ -108,7 +112,7 @@ def FETCHER(IPaddr,Uname,Passwd):
                          }
         else:
             break
-    
+
     def Adapters():
         Adps=[]
         ADAPTERS={}
@@ -193,6 +197,7 @@ def FETCHER(IPaddr,Uname,Passwd):
                                     "S Controller Model":controller.attrib['model'],
                                     "S Controller Serial":controller.attrib['serial'],
                                     "S Controller Vendor":controller.attrib['vendor'],
+                                    "S Controller Security Flag":controller.attrib['controllerFlags'],
                                     "No of Disks Present":str(len(disks))
                                 }
                     c+=1
@@ -224,13 +229,25 @@ def FETCHER(IPaddr,Uname,Passwd):
         D[IP_Addr].update(Disks)
         
 
-    Adapters()
-    Fi()
-    Racks()
-    Blades()
-    Controllers()
-    Disks()
-
+    # Adapters()
+    # Fi()
+    # Racks()
+    # Blades()
+    # Controllers()
+    # Disks()
+    if args.getAdaptors:
+        Adapters()
+    if args.getFIs:
+        Fi()
+    if args.getRackServers:
+        Racks()
+    if args.getBladeServers:
+        Blades()
+    if args.getControllers:
+        Controllers()
+    if args.getDisks:
+        Disks()
+    
 with open("config.json","r") as f:
     data=json.load(f)
 
@@ -244,18 +261,11 @@ elif len(sys.argv)==2:
 else:
     for x in data.values():
         FETCHER(x[0],x[1],x[2])
-        # try:
-        #     FETCHER(x[0],x[1],x[2])
-        # except requests.exceptions.RequestException:
-        #     continue
 
     def printer(data):
         df = pd.DataFrame.from_dict(data,orient='index')
         print(tabulate(df,tablefmt='fancy_grid'))
-    # def pp1(data):
-    #     df = pd.DataFrame(data,index=[0]).T
-    #     df.fillna(0, inplace=True)
-    #     print(df)
+
 
     if args.getAdaptors!="defi":
         found=False
@@ -269,9 +279,6 @@ else:
                                 printer(vv2)
         if not found:
             print("\n<---Adapter Not Availble in Any of the Setups!--->\n")
-                                
-        
-    # print(json.dumps(D,indent=4))
 
     if args.getBladeServers!="defi":
         found=False
